@@ -10,14 +10,34 @@ if (shell.exec('npm run wbuild').code !== 0) {
     shell.exit(1);
 }
 
-if (container_name) {
-    shell.echo('Getting appstore info from realm docker container');
-    shell.exec(`docker cp ${container_name}:/server/portal/static/appstore.json  ../../realm/appstore.json`)
-}
+shell.echo('Getting appstore info from realm docker container');
+shell.exec(`docker cp ${container_name}:/server/portal/static/appstore.json  ../../realm/appstore.json`)
 
 
 shell.echo('App file creating...');
+tuval.appPackager('./dist/index.js', `../../realm/applications/${appName}.app`)
 
-tuval.appPackager('./dist/index.js', `./dist/${appName}.app`);
+shell.echo('App store info updating...');
+const path = require('path');
+const fs = require('fs');
+const a = fs.readFileSync('../../realm/appstore.json', 'utf8');
 
-shell.cp('-Rf', './dist/com.tuvalsoft.app.workbench.app', '../realm-runtime/src/portal/static/applications');
+const appStoreInfo = JSON.parse(a);
+const result = appStoreInfo.apps.find(item => item.id === appName);
+
+if (result) {
+    const index = appStoreInfo.apps.indexOf(result);
+    appStoreInfo.apps[index] = require('./src/AppStoreInfo');
+} else {
+    appStoreInfo.apps.push(require('./src/AppStoreInfo'));
+}
+const aa = JSON.stringify(appStoreInfo);
+
+fs.writeFileSync('../../realm/appstore.json', aa, 'utf8');
+shell.echo('App info done.');
+
+shell.echo('Exposing appstore info to realm container');
+shell.exec(`docker cp  ../../realm/appstore.json  ${container_name}:/server/portal/static/appstore.json`)
+shell.echo(`Exposing ${appName}.app to realm container appstore`);
+shell.exec(`docker cp  ../../realm/applications/${appName}.app  ${container_name}:/server/portal/static/applications/${appName}.app`)
+shell.echo(`All done.`);
